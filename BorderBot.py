@@ -4,7 +4,7 @@ import random
 
 
 myID, game_map = hlt_erdman.get_init()
-hlt_erdman.send_init("CrapBot")
+hlt_erdman.send_init("BorderBot1")
 
 
 def find_nearest_enemy_direction(square):
@@ -43,44 +43,17 @@ def heuristic(square):
         # return total potential damage caused by overkill when attacking this square
         return sum(neighbor.strength for neighbor in game_map.neighbors(square) if neighbor.owner not in (0, myID))
 
-def combine_border_pieces(square):
-    border_p1 = square
-    border_p2 = square
-    heuristic_p0, heuristic_p1, heuristic_p2 = 0, 0, 0
-    direction_1, direction_2 = STILL, STILL
-    for direction, neighbor in enumerate(game_map.neighbors(square)):
-        if neighbor.owner == myID:
-            for neighbor_of_neighbor in game_map.neighbors(neighbor):
-                if neighbor_of_neighbor != myID:
-                    if border_p1.x == square.x and border_p1.y == square.y:
-                        border_p1 = neighbor
-                        direction_1 = direction
-                    else:
-                        border_p2 = neighbor
-                        direction_2 = direction
-    for neighbor in game_map.neighbors(square):
-        if neighbor.owner != myID:
-            temp_heuristic = heuristic(neighbor)
-            if heuristic_p0 < temp_heuristic:
-                heuristic_p0 = temp_heuristic
-    for neighbor in game_map.neighbors(border_p1):
-        if neighbor.owner != myID:
-            temp_heuristic = heuristic(neighbor)
-            if heuristic_p1 < temp_heuristic:
-                heuristic_p1 = temp_heuristic
-    for neighbor in game_map.neighbors(border_p2):
-        if neighbor.owner != myID:
-            temp_heuristic = heuristic(neighbor)
-            if heuristic_p2 < temp_heuristic:
-                heuristic_p2 = temp_heuristic
-    if heuristic_p1 >= heuristic_p2 and heuristic_p1 >= heuristic_p0:
-        if game_map.get_target(square, direction_1).owner == myID:
-            return direction_1
-    if heuristic_p2 >= heuristic_p1 and heuristic_p1 >= heuristic_p0:
-        if game_map.get_target(square, direction_2).owner == myID:
-            return direction_2       
-    return STILL     
-
+def friendly_heuristic(square):
+    #Heuristic that can take friendly squares as the argument
+    if square is not None:
+        target = max((neighbor for neighbor in game_map.neighbors(square)
+                                    if neighbor.owner != myID),
+                                    default = None,
+                                    key = lambda t: heuristic(t))
+        if target is not None:
+            return heuristic(target)
+    return 0
+    
 def get_move(square):       
     target, direction = max(((neighbor, direction) for direction, neighbor in enumerate(game_map.neighbors(square))
                                 if neighbor.owner != myID),
@@ -95,11 +68,20 @@ def get_move(square):
     if not border:
         return Move(square, find_nearest_enemy_direction(square))
     else:
-        return Move(square, combine_border_pieces(square))
+        target, direction = max(((neighbor, direction) for direction, neighbor in enumerate(game_map.neighbors(square))
+                                if neighbor.owner == myID),
+                                default = (None, None),
+                                key = lambda t: friendly_heuristic(t[0]))
+        if target is not None and target.owner == myID:
+            if friendly_heuristic(target) > friendly_heuristic(square):
+                return Move(square, direction)
+
+    return Move(square, STILL)
+    
+        
 
     
 while True:
     game_map.get_frame()
     moves = [get_move(square) for square in game_map if square.owner == myID]
     hlt_erdman.send_frame(moves)
-
